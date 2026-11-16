@@ -1,0 +1,95 @@
+{
+  "scenario": "long",
+  "description": "One forward pass with every intermediate stage captured.",
+  "output_patches": 5,
+  "shapes": {
+    "context": [
+      2,
+      300
+    ],
+    "group_ids": [
+      2
+    ],
+    "future_covariates": [
+      2,
+      80
+    ],
+    "loc": [
+      2
+    ],
+    "scale": [
+      2
+    ],
+    "normalized_context": [
+      2,
+      300
+    ],
+    "patched_context": [
+      2,
+      19,
+      48
+    ],
+    "patched_future": [
+      2,
+      5,
+      48
+    ],
+    "input_embeds": [
+      2,
+      25,
+      512
+    ],
+    "layer_00": [
+      2,
+      25,
+      512
+    ],
+    "layer_01": [
+      2,
+      25,
+      512
+    ],
+    "layer_02": [
+      2,
+      25,
+      512
+    ],
+    "layer_03": [
+      2,
+      25,
+      512
+    ],
+    "layer_04": [
+      2,
+      25,
+      512
+    ],
+    "layer_05": [
+      2,
+      25,
+      512
+    ],
+    "hidden": [
+      2,
+      25,
+      512
+    ],
+    "quantiles_normalized": [
+      2,
+      13,
+      80
+    ],
+    "quantiles": [
+      2,
+      13,
+      80
+    ]
+  },
+  "notes": "group_ids stored as float32. quantiles = denormalized model output; quantiles_normalized = before sinh/scale/loc. input_embeds = context patch tokens, [REG], future tokens.",
+  "generator": {
+    "chronos-forecasting": "2.3.2",
+    "torch": "2.15.0",
+    "device": "cpu",
+    "dtype": "float32"
+  }
+}
