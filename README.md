@@ -45,7 +45,7 @@ high := fc.Percentile90()    // between these two lines
 
 Both models read up to 8,192 steps of history and forecast up to 1,024 steps in a single pass. The base model is more accurate and predicts more percentile levels natively; the small model is faster and lighter. Switching between them means changing one import, with no other code changes.
 
-Each model lives in a repository of its own, because the two together exceed the size limit Go places on a repository's download. A model's package name (`small` or `base`) differs from the last element of its import path, so import it with that name as an alias, as the examples below do.
+Each model lives in a repository of its own, and the base model's weights are split across four more modules that it requires, because Go cannot download that much data as a single module; `go get` fetches them automatically. A model's package name (`small` or `base`) differs from the last element of its import path, so import it with that name as an alias, as the examples below do.
 
 
 ## Installation
@@ -186,7 +186,7 @@ Chronos-2 is a transformer encoder that reads a series in 16-step patches and pr
 
 ## Contributing
 
-[`AGENTS.md`](AGENTS.md) describes the repository layout, the `make` targets, and the rules every change follows, for human and AI contributors alike. The model weights live in [`chronos2-go-base`](https://github.com/pinkhop/chronos2-go-base) and [`chronos2-go-small`](https://github.com/pinkhop/chronos2-go-small), each with an `AGENTS.md` of its own.
+[`AGENTS.md`](AGENTS.md) describes the repository layout, the `make` targets, and the rules every change follows, for human and AI contributors alike. The model weights live in [`chronos2-go-small`](https://github.com/pinkhop/chronos2-go-small), and in [`chronos2-go-base`](https://github.com/pinkhop/chronos2-go-base) with its four part modules, each repository with an `AGENTS.md` of its own.
 
 
 ## License

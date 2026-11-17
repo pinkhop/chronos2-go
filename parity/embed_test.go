@@ -25,31 +25,66 @@ func TestModelPackages_EmbeddedShards_AreByteSlices(t *testing.T) {
 	t.Parallel()
 
 	for _, model := range []string{"small", "base"} {
-		t.Run(model+".go", func(t *testing.T) {
+		t.Run(model, func(t *testing.T) {
 			t.Parallel()
 
-			// Given: the model package's source file and a file set to parse
-			// it into.
-			source := filepath.Join(modelModuleDir(t, model), model+".go")
+			// Given: the Go source files of every module that embeds the
+			// model's shards, and a file set to parse them into.
+			sources := shardModuleSources(t, model)
 			files := token.NewFileSet()
 
-			// When
-			file, err := parser.ParseFile(files, source, nil, parser.ParseComments)
-			// Then
-			if err != nil {
-				t.Fatalf("parse %s: %v", source, err)
+			// When: each source is parsed and its shard declarations
+			// collected, keyed by file and variable name.
+			shards := make(map[string]string)
+			var parseErrors []error
+			for _, source := range sources {
+				file, err := parser.ParseFile(files, source, nil, parser.ParseComments)
+				if err != nil {
+					parseErrors = append(parseErrors, err)
+					continue
+				}
+				for name, typ := range embeddedShardTypes(file) {
+					shards[filepath.Base(source)+": "+name] = typ
+				}
 			}
-			shards := embeddedShardTypes(file)
+
+			// Then
+			for _, err := range parseErrors {
+				t.Errorf("parse: %v", err)
+			}
 			if len(shards) == 0 {
-				t.Fatalf("%s embeds no %s files", source, shardSuffix)
+				t.Fatalf("%v embed no %s files", sources, shardSuffix)
 			}
 			for name, typ := range shards {
 				if typ != "[]byte" {
-					t.Errorf("%s declares shard %s as %s, want []byte", source, name, typ)
+					t.Errorf("%s declares a shard as %s, want []byte", name, typ)
 				}
 			}
 		})
 	}
+}
+
+// shardModuleSources returns the non-test Go source files of every module
+// that embeds the named real model's shards, failing t when it cannot list
+// them or finds none.
+func shardModuleSources(t *testing.T, model string) []string {
+	t.Helper()
+	var sources []string
+	for _, dir := range shardModuleDirs(t, model) {
+		matches, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		if err != nil {
+			t.Fatalf("list Go files in %s: %v", dir, err)
+		}
+		for _, match := range matches {
+			if !strings.HasSuffix(match, "_test.go") {
+				sources = append(sources, match)
+			}
+		}
+	}
+	if len(sources) == 0 {
+		t.Fatalf("no Go source files in the %s model's shard modules", model)
+	}
+	return sources
 }
 
 // embeddedShardTypes returns, for each variable in file whose //go:embed

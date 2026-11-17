@@ -1,6 +1,6 @@
 # Agent Guide
 
-This repository is `chronos2-go`, a pure-Go library that runs Amazon's Chronos-2 time series forecasting model on-device, with the model weights embedded in the consumer's binary. The weights live in two sibling repositories, one per model. These instructions apply to any agent or developer changing the code in this repository.
+This repository is `chronos2-go`, a pure-Go library that runs Amazon's Chronos-2 time series forecasting model on-device, with the model weights embedded in the consumer's binary. The weights live in sibling repositories: one per model, plus four that hold the base model's shards. These instructions apply to any agent or developer changing the code in this repository.
 
 Read [`docs/DESIGN.md`](docs/DESIGN.md) before changing behavior. It is the source of truth for packaging, internal architecture, and verification, and it states the principles the public API follows. The doc comments of package `chronos2` are the source of truth for the public API itself. When a change alters the design or the public contract, update `docs/DESIGN.md` or the doc comments in the same change.
 
@@ -14,14 +14,15 @@ The repository holds two Go modules:
 | `.` | Package `chronos2` (the public API) and every `internal/` package. |
 | `parity` | Real-model parity tests and their fixtures, the weights-manifest and embed-aliasing checks on the model modules, and the module-size check. Never released. |
 
-Each model is the only module in a repository of its own, at that repository's root:
+Each weight module is the only module in a repository of its own, at that repository's root:
 
 | Repository | Module Role |
 |---|---|
-| [`github.com/pinkhop/chronos2-go-base`](https://github.com/pinkhop/chronos2-go-base) | Package `base`: embeds the `amazon/chronos-2` checkpoint. |
+| [`github.com/pinkhop/chronos2-go-base`](https://github.com/pinkhop/chronos2-go-base) | Package `base`: embeds the `amazon/chronos-2` config and assembles the shards of the four part modules. |
+| [`github.com/pinkhop/chronos2-go-base-part1`](https://github.com/pinkhop/chronos2-go-base-part1) through [`-part4`](https://github.com/pinkhop/chronos2-go-base-part4) | Packages `part1` through `part4`: each embeds three of the base checkpoint's 12 shards and returns them through `Shards()`. |
 | [`github.com/pinkhop/chronos2-go-small`](https://github.com/pinkhop/chronos2-go-small) | Package `small`: embeds the `autogluon/chronos-2-small` checkpoint. |
 
-A model repository holds only its `New()` source, `weights/`, `LICENSE`, `NOTICE`, `README.md`, `AGENTS.md`, a `Makefile`, and the `mise` files. Its `AGENTS.md` governs changes there.
+A weight repository holds only its Go source, `weights/`, `LICENSE`, `NOTICE`, `README.md`, `AGENTS.md`, a `Makefile`, and the `mise` files. Its `AGENTS.md` governs changes there.
 
 Inside the root module:
 
@@ -82,8 +83,8 @@ These protect properties that are expensive or impossible to restore once broken
 
 ### Weights and Modules
 
-- The rules for weights and model modules (no Git LFS, the shard-size and manifest rules, `[]byte` embeds, and no tests in a model module) live in the `AGENTS.md` of [`chronos2-go-base`](https://github.com/pinkhop/chronos2-go-base) and [`chronos2-go-small`](https://github.com/pinkhop/chronos2-go-small). Follow them whenever a change reaches those repositories.
-- `parity` enforces part of them from here. Its embed test checks that each model package embeds its shards as `[]byte`, and its alias test checks that `Load` views them without copying (it aliases aligned shard bytes as float32 tensors, and the Go linker currently aligns `[]byte` embeds but not string data). Its manifest test checks each model's weights against `weights/manifest.json` and the upstream checkpoint. Keep all three passing.
+- The rules for weights and model modules (no Git LFS, the shard-size and manifest rules, `[]byte` embeds, and no tests in a model module) live in the `AGENTS.md` of each weight repository. Follow them whenever a change reaches those repositories.
+- `parity` enforces part of them from here. Its embed test checks that every package embedding shards (`small` and the four base parts) embeds them as `[]byte`, and its alias test checks that `Load` views them without copying (it aliases aligned shard bytes as float32 tensors, and the Go linker currently aligns `[]byte` embeds but not string data). Its manifest test checks each model's config and shards against the `weights/manifest.json` of the modules holding them, and against the upstream checkpoint. Keep all three passing.
 - Never commit weights or other large files to this repository. Go downloads the root module as an archive of the whole repository, nested modules included, and refuses that archive above 500 MiB.
 - No change may make this repository's whole-repository archive, or any module it publishes, exceed the Go module limits. The module-size test in `parity`, part of `make test`, checks both.
 - No module may require `parity`. Only `parity` imports `parity`.
@@ -197,7 +198,7 @@ The modules target Go 1.27.4. Prefer the modern standard library and language fo
 - Pin every Go-based developer tool in `mise.toml` (adding with `mise use --pin`) and commit `mise.lock`. Never declare tools with `go.mod` `tool` directives or run them with `go tool`.
 - Never use `golangci-lint`; the `Makefile` runs each analyzer directly.
 - `go-errorlint` is pinned but not run, because its pinned release cannot load packages compiled by Go 1.27. Add it to `make lint` once a release can.
-- Keep the Go version in `mise.toml` and every `go.mod` in sync, including the model repositories'.
+- Keep the Go version in `mise.toml` and every `go.mod` in sync, including the weight repositories'.
 - `simd/archsimd`, which the SIMD build uses, is outside the Go 1 compatibility promise and may change incompatibly in any Go release. Upgrade Go only after `make test-simd` and `make lint` pass on the new version.
 
 

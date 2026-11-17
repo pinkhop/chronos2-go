@@ -38,20 +38,21 @@ The documentation of package `chronos2` is the public contract: every method, op
 
 ### Modules
 
-The project spans three repositories and four Go modules:
+The project spans seven repositories and eight Go modules:
 
 | Module Path | Repository and Directory | Contents |
 |---|---|---|
 | `github.com/pinkhop/chronos2-go` | `chronos2-go`, root | Package `chronos2`, all internal packages, and a tiny synthetic test checkpoint (saved copy of a model, here randomly initialized rather than trained). No real weights. |
 | `github.com/pinkhop/chronos2-go/parity` | `chronos2-go`, `parity` | Real-model parity tests and their fixtures, the weights-manifest and embed-aliasing checks on the model modules, and the module-size check. Never required by another module and never tagged. |
-| `github.com/pinkhop/chronos2-go-base` | `chronos2-go-base`, root | Package `base` and the base checkpoint. |
+| `github.com/pinkhop/chronos2-go-base` | `chronos2-go-base`, root | Package `base` and the base checkpoint's config. |
+| `github.com/pinkhop/chronos2-go-base-part1` through `-part4` | `chronos2-go-base-part1` through `-part4`, root | Packages `part1` through `part4`, each holding three of the base checkpoint's 12 shards. |
 | `github.com/pinkhop/chronos2-go-small` | `chronos2-go-small`, root | Package `small` and the small checkpoint. |
 
-Each model module is the only module in its repository. That repository holds the module's `New()` source, `weights/`, `LICENSE`, `NOTICE`, `README.md`, `AGENTS.md`, a `Makefile`, and the `mise` files, and nothing else: no tests and no fixtures. Its `make check` target verifies the weights against their manifest and the module against the size limits below. The model packages are named `base` and `small`, which differ from the last element of their import paths, so documentation imports them with an alias, for example `small "github.com/pinkhop/chronos2-go-small"`.
+Each weight module (a model module or a base part) is the only module in its repository. That repository holds the module's Go source, `weights/`, `LICENSE`, `NOTICE`, `README.md`, `AGENTS.md`, a `Makefile`, and the `mise` files, and nothing else: no tests and no fixtures. Its `make check` target verifies its weights against their manifest and the module against the size limits below. The base parts exist only to carry shards: each exports `Shards()`, requires nothing, and is imported by `base` alone, which passes the parts' shards to `Load` in checkpoint order. The model packages are named `base` and `small`, which differ from the last element of their import paths, so documentation imports them with an alias, for example `small "github.com/pinkhop/chronos2-go-small"`.
 
 `go get` and `go mod download` fetch whole module archives, so this split also bounds what a consumer downloads: a consumer of the small model never downloads the base weights, and the root module's archive excludes the parity fixtures, which belong to a nested module.
 
-Requirements point in one direction only: each model module requires the root module; `parity` requires the root module and both model modules; and no module requires `parity`. Because Go builds a consumer's dependency graph from `require` directives, `parity` can never enter it. The rule that keeps it that way is that only `parity` imports `parity`.
+Requirements point in one direction only: each model module requires the root module, and `base` also requires the four parts; `parity` requires the root module and both model modules; and no module requires `parity`. Because Go builds a consumer's dependency graph from `require` directives, `parity` can never enter it. The rule that keeps it that way is that only `parity` imports `parity`.
 
 Each model module requires the root module at the lowest version its `New()` works with, so a consumer's build selects whichever newer library version the consumer or another dependency requires. `parity` replaces the root module with `../`, so it tests the working tree, and takes the model modules from the module cache at the versions it requires, so its real-model tests run against the published weights.
 
@@ -59,26 +60,27 @@ Each model module requires the root module at the lowest version its `New()` wor
 
 Go limits a module download in two ways, and the [Go module proxy](https://proxy.golang.org/), which stores mirrors of Go modules as zip archives, enforces the same limits because it runs the same code:
 
-- **Module Archive:** the files in a module's zip archive may total at most 500 MiB uncompressed. The base model module is 477.9 MB, about 44 MiB below the limit; the small model module is 111.8 MB.
+- **Module Archive:** the files in a module's zip archive may total at most 500 MiB uncompressed. The largest weight module, `chronos2-go-base-part1`, is 132.2 MB; the small model module is 111.8 MB.
 - **Repository Archive:** for a module at a repository's root, Go downloads a `git archive` of the whole repository and refuses it when that raw zip exceeds 500 MiB. It applies the limit before it drops the files of nested modules, so they count too. Go disables `export-ignore` attributes for this archive, so no attribute can shrink it.
 
-The two checkpoints together zip to 527.5 MiB (base 427.9 MiB, small 99.6 MiB), more than one repository archive allows, so each lives in a repository of its own, and a model repository holds nothing its module does not need. The repository-archive limit binds this repository too: the root module's download includes `parity` and its fixtures, so no checkpoint may be committed here.
+The [Go module proxy](https://proxy.golang.org/) is stricter in practice: it does not serve a module whose archive approaches those limits, apparently because it fetches and packages each module within a time limit it does not publish, and without the proxy the checksum database cannot record the module either. It serves the small model module, whose archive is 99.6 MiB. So no weight module's repository archive exceeds a working ceiling (parameter `maxWeightArchiveMiB`, default 120 MiB). The small checkpoint zips to 99.6 MiB and fits in its model module. The base checkpoint zips to 427.9 MiB, so its 12 shards are split three apiece across four part modules of 101.5–118.3 MiB, and `base` holds only the config. Each weight repository holds nothing its module does not need. The repository-archive limit binds this repository too: the root module's download includes `parity` and its fixtures, so no checkpoint may be committed here.
 
 `make test` includes a size check in the `parity` module that covers this repository's published modules, including the root module's whole-repository archive, so an oversized module fails locally or in CI rather than after it is published. It packages each module with `golang.org/x/mod/zip`, the package the `go` command itself uses, so it applies the proxy's exact rules.
 
 ### Releases
 
-Versions are independent across repositories. A library release does not require a model release; a model repository releases only when its weights or its `New()` change. Every module's first release is v1.0.0.
+Versions are independent across repositories. A library release does not require a model release; a weight repository releases only when its weights or its Go source change.
 
 A release proceeds in this order, because a module's `go.sum` can record another module's checksum only after that module is published:
 
 1.  Tag this repository's commit `vX.Y.Z`, releasing the root module.
-2.  For each model whose weights or `New()` changed, run `go mod tidy` in its repository, which records the library's checksum in its `go.sum`; commit, and tag that commit with the model's next version, `vX.Y.Z`.
-3.  Set `parity`'s requirements to the released versions and run `go mod tidy` there too, so its real-model tests use the released weights. `parity` is never tagged.
+2.  Tag each base part whose shards changed with its next version, `vX.Y.Z`, and confirm that `https://proxy.golang.org/<module>/@v/<version>.info` serves it before going on.
+3.  For each model whose weights or Go source changed, set its requirements to the released versions, run `go mod tidy` in its repository, which records their checksums in its `go.sum`; commit, and tag that commit with the model's next version, `vX.Y.Z`.
+4.  Set `parity`'s requirements to the released versions and run `go mod tidy` there too, so its real-model tests use the released weights. `parity` is never tagged.
 
 ### Embedded Weights
 
-Weights ship as fp32, bit-identical to the published checkpoints. Git LFS is unsuitable because neither the module proxy nor a direct `go get` fetches LFS content: consumers would receive pointer files. Instead, each checkpoint is committed as plain Git files under `weights/` in its model repository:
+Weights ship as fp32, bit-identical to the published checkpoints. Git LFS is unsuitable because neither the module proxy nor a direct `go get` fetches LFS content: consumers would receive pointer files. Instead, each checkpoint is committed as plain Git files under `weights/`: the small checkpoint entirely in its model repository, and the base checkpoint's config in `chronos2-go-base` with its shards in the four part repositories.
 
 ```text
 chronos2-go-small/
@@ -94,9 +96,9 @@ chronos2-go-small/
 ```
 
 - Each shard is a complete, valid safetensors file holding whole tensors, kept under the shard-size limit (parameter `maxShardBytes`, default 45 MB) so no file reaches GitHub's 50 MB warning threshold.
-- `manifest.json` records the upstream repository, revision, and SHA-256 of the original `model.safetensors`, and the SHA-256 of every shard.
+- Every `manifest.json` records the upstream repository, revision, and SHA-256 of the original `model.safetensors`. A model module's manifest also records the config's SHA-256, and one holding shards records each shard's size and SHA-256. `chronos2-go-base`'s manifest lists the part modules in checkpoint order (`shard_modules`).
 - Each shard is embedded as its own `[]byte` variable through `//go:embed`. The Go linker currently aligns embedded `[]byte` data (not a language guarantee; `parity/alias_test.go` verifies it), so `Load` can view the weights in place without copying them. It does not align `string` data, which would leave the weights at whatever byte offset the layout produced and usually force `Load` to copy the whole checkpoint: about 478 MB of heap for the base model. The embedded bytes live in writable memory, so the weights are read-only by convention, not in hardware; nothing may write to a shard after `Load`.
-- Each model repository's `.gitattributes` marks `*.safetensors` as binary and keeps it out of any LFS rule.
+- Each weight repository's `.gitattributes` marks `*.safetensors` as binary and keeps it out of any LFS rule.
 
 The upstream checkpoints are:
 
@@ -181,7 +183,7 @@ chronos2-go/
         └── small/
 ```
 
-The model packages `base` and `small` live in the `chronos2-go-base` and `chronos2-go-small` repositories, each at its repository's root (see [Embedded Weights](#embedded-weights)).
+The model packages `base` and `small` live in the `chronos2-go-base` and `chronos2-go-small` repositories, and the base parts in `chronos2-go-base-part1` through `-part4`, each at its repository's root (see [Embedded Weights](#embedded-weights)).
 
 The root package validates inputs, assembles tasks, invokes the batching, network, and horizon packages, and shapes results. It defines the narrow interfaces it consumes (for example, the network's forward pass), so the batching, horizon, and result logic is testable against fakes without real weights.
 

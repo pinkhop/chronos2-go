@@ -133,23 +133,33 @@ func unflatten(index int, shape []int) []int {
 	return indices
 }
 
-// CheckpointTensors reads every safetensors shard in dir (the weights
-// directory of a real model module, or any directory of shards) and returns
-// its config.json together with a lookup over every tensor, decoded to
-// float32 copies. The lookup has the signature of network.TensorLookup. It
-// fails the test when a file cannot be read or parsed.
-func CheckpointTensors(tb testing.TB, dir string) (config []byte, lookup func(name string) ([]float32, []int, bool)) {
+// CheckpointTensors reads config.json from configDir and every safetensors
+// shard in shardDirs, and returns the config together with a lookup over
+// every tensor, decoded to float32 copies. configDir is the weights directory
+// of a real model module, or any directory holding a config.json; shardDirs
+// are the directories holding the checkpoint's shards, which may include
+// configDir, and must hold at least one shard in all. The lookup has the
+// signature of network.TensorLookup. It fails the test when a file cannot be
+// read or parsed.
+func CheckpointTensors(tb testing.TB, configDir string, shardDirs ...string) (config []byte, lookup func(name string) ([]float32, []int, bool)) {
 	tb.Helper()
 	// #nosec G304 -- tests pass fixed repository paths; no untrusted input.
-	config, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	config, err := os.ReadFile(filepath.Join(configDir, "config.json"))
 	if err != nil {
 		tb.Fatalf("read checkpoint config: %v", err)
 	}
-	shardPaths, err := filepath.Glob(filepath.Join(dir, "*.safetensors"))
-	if err != nil || len(shardPaths) == 0 {
-		tb.Fatalf("find checkpoint shards in %s: %v", dir, err)
+	var shardPaths []string
+	for _, dir := range shardDirs {
+		paths, err := filepath.Glob(filepath.Join(dir, "*.safetensors"))
+		if err != nil {
+			tb.Fatalf("find checkpoint shards in %s: %v", dir, err)
+		}
+		slices.Sort(paths)
+		shardPaths = append(shardPaths, paths...)
 	}
-	slices.Sort(shardPaths)
+	if len(shardPaths) == 0 {
+		tb.Fatalf("find checkpoint shards: none in %v", shardDirs)
+	}
 	tensors := make(map[string]Tensor)
 	for _, path := range shardPaths {
 		if err := readShard(path, tensors); err != nil {

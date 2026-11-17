@@ -17,10 +17,10 @@ var forwardScenarios = []string{
 }
 
 // realNetwork builds the named real model ("small" or "base") from its
-// committed weight shards, failing the test when it cannot.
+// committed config and weight shards, failing the test when it cannot.
 func realNetwork(tb testing.TB, model string) *network.Network {
 	tb.Helper()
-	configJSON, lookup := testmodel.CheckpointTensors(tb, filepath.Join(modelModuleDir(tb, model), "weights"))
+	configJSON, lookup := testmodel.CheckpointTensors(tb, filepath.Join(modelModuleDir(tb, model), "weights"), shardWeightsDirs(tb, model)...)
 	config, err := network.ParseConfig(configJSON)
 	if err != nil {
 		tb.Fatalf("parse %s config: %v", model, err)
