@@ -137,21 +137,6 @@ vector := emb.Summary()
 | `chronos2.WithBatchSize(n)` | Cap how many series are processed per pass, bounding memory. |
 
 
-## Command-Line Tool
-
-The `chronos2` command is a quick way to try the library without writing any Go: it forecasts a CSV column from the terminal, with both models built in. It is not meant as a production forecasting tool; programs should call the library directly.
-
-```console
-$ go install github.com/pinkhop/chronos2-go/cmd/chronos2@latest
-$ chronos2 forecast --model small --horizon 24 --percentiles 10,90 < load.csv
-step,p10,median,p90
-1,410.2,455.8,503.1
-2,398.7,449.0,498.4
-```
-
-Because it embeds both models, the binary is about 600 MB.
-
-
 ## Performance
 
 The library ships in two builds. The default build's numeric kernels are portable Go and run on every platform Go supports. The SIMD build, available on arm64 and amd64, replaces the hottest kernels (matrix multiplication, softmax, and the element-wise bias and ReLU passes) with versions that use the CPU's vector (SIMD) instructions.

@@ -7,12 +7,11 @@ Read [`docs/DESIGN.md`](docs/DESIGN.md) before changing behavior. It is the sour
 
 ## Repository Layout
 
-The repository holds three Go modules:
+The repository holds two Go modules:
 
 | Directory | Module Role |
 |---|---|
 | `.` | Package `chronos2` (the public API) and every `internal/` package. |
-| `cmd/chronos2` | The `chronos2` command-line tool, which embeds both models and parses arguments with `github.com/urfave/cli/v3`; its commands live in `cmd/chronos2/internal/command`. |
 | `parity` | Real-model parity tests and their fixtures, the weights-manifest and embed-aliasing checks on the model modules, and the module-size check. Never released. |
 
 Each model is the only module in a repository of its own, at that repository's root:
@@ -53,10 +52,7 @@ Tool versions, including Go itself, are pinned in `mise.toml` and `mise.lock`. R
 | `make test-simd` | Run the default test tier under the race detector in the SIMD build (`GOEXPERIMENT=simd`). |
 | `make test-slow-simd` | Run only the `slow` tier in the SIMD build. |
 | `make test-all` | Run both tiers in both builds. |
-| `make build` | Build the command-line tool into `dist/`. |
-| `make build-simd` | Build the command-line tool with the SIMD kernels into `dist/chronos2-simd`. |
-| `make build-linux` | Cross-compile the command-line tool for Linux on the host architecture. |
-| `make clean` | Remove `dist/` and the test cache. |
+| `make clean` | Remove the test cache. |
 
 `make lint` and `make security` run their type-checked analyzers in both builds, so a single run covers the SIMD build too.
 
@@ -82,7 +78,7 @@ These protect properties that are expensive or impossible to restore once broken
 - No cgo. No network or file-system access at run time; checkpoints arrive only as embedded data.
 - The library never logs and never writes to standard streams. It reports problems by returning errors.
 - `unsafe` appears only where `Load` aliases embedded weight bytes, with a comment justifying it.
-- Add third-party dependencies only to `cmd/chronos2` and `parity`, and only after discussing the need. The root module depends on the standard library alone (plus test-only dependencies such as `github.com/google/go-cmp`), and the model modules on the root module alone.
+- Add third-party dependencies only to `parity`, and only after discussing the need. The root module depends on the standard library alone (plus test-only dependencies such as `github.com/google/go-cmp`), and the model modules on the root module alone.
 
 ### Weights and Modules
 
@@ -203,7 +199,6 @@ The modules target Go 1.27.4. Prefer the modern standard library and language fo
 - `go-errorlint` is pinned but not run, because its pinned release cannot load packages compiled by Go 1.27. Add it to `make lint` once a release can.
 - Keep the Go version in `mise.toml` and every `go.mod` in sync, including the model repositories'.
 - `simd/archsimd`, which the SIMD build uses, is outside the Go 1 compatibility promise and may change incompatibly in any Go release. Upgrade Go only after `make test-simd` and `make lint` pass on the new version.
-- Build output goes to `dist/`. Builds stamp provenance with `-buildvcs=true`; never inject versions with `-ldflags -X`.
 
 
 ## Documentation

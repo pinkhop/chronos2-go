@@ -25,7 +25,6 @@ var publishedModules = []struct {
 	dir string
 }{
 	{path: "github.com/pinkhop/chronos2-go", dir: ""},
-	{path: "github.com/pinkhop/chronos2-go/cmd/chronos2", dir: "cmd/chronos2"},
 }
 
 // moduleSizeHeadroomBytes is the minimum room each published module must

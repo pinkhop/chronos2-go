@@ -1,10 +1,10 @@
-# chronos2-go — formatting, analysis, tests, and builds across every module.
+# chronos2-go — formatting, analysis, and tests across every module.
 #
 # `make help` lists every public target alphabetically with its one-line
 # description. The listing is generated from the `## target: description`
 # comments below, so a new target documents itself by carrying one.
 #
-# The repository holds three Go modules.
+# The repository holds two Go modules.
 # `go vet ./...` and its relatives stop at a nested go.mod, so every
 # type-checked target loops over MODULES and runs inside each module directory.
 #
@@ -17,11 +17,8 @@
 ###############################################################################
 # MODULE SETTINGS
 
-APP           := chronos2
-CMD_MODULE    := cmd/chronos2
-
 # Every module in the repository, root first.
-MODULES       := . cmd/chronos2 parity
+MODULES       := . parity
 
 # The build-tag sets the type-checked analyses run under, one pass per set; the
 # literal "untagged" names the default set, which has no -tags flag.
@@ -43,18 +40,6 @@ GENERATED_PATHSPECS :=
 ###############################################################################
 # COMMON SETTINGS
 
-BUILD_DIR     := dist
-BIN           := $(BUILD_DIR)/$(APP)
-HOST_ARCH     := $(shell go env GOARCH)
-LINUX_BIN     := $(BUILD_DIR)/$(APP).linux-$(HOST_ARCH)
-SIMD_BIN      := $(BUILD_DIR)/$(APP)-simd
-
-# Static, cgo-free binaries. -buildvcs=true embeds the commit and whether the
-# tree was modified, which `chronos2 version` reads back at run time with
-# debug.ReadBuildInfo; nothing is injected through -ldflags -X.
-CGO_ENABLED   := 0
-GO_BUILD_FLAGS := -buildmode=exe -buildvcs=true -ldflags='-s -w' -trimpath
-
 # Every hand-written Go file Git does not ignore, including new files not yet
 # added, except vendored code, test fixtures, and generated code.
 GO_FILES       = git ls-files --cached --others --exclude-standard '*.go' \
@@ -66,35 +51,14 @@ GO_FILES       = git ls-files --cached --others --exclude-standard '*.go' \
 SLOW_TEST_FLAGS := -tags=slow -timeout=120m
 
 .DEFAULT_GOAL := help
-.PHONY: build build-linux build-simd clean format help lint security security-gosec security-govulncheck test test-all test-simd test-slow test-slow-simd test-units
+.PHONY: clean format help lint security security-gosec security-govulncheck test test-all test-simd test-slow test-slow-simd test-units
 
 
 ###############################################################################
 # TARGETS
 
-## build: compile the chronos2 command for this platform into dist/
-build:
-	@mkdir -p $(BUILD_DIR)
-	cd $(CMD_MODULE) && CGO_ENABLED=$(CGO_ENABLED) go build $(GO_BUILD_FLAGS) -o $(CURDIR)/$(BIN) .
-	@echo "built $(BIN)"
-
-## build-linux: cross-compile the chronos2 command for Linux on the host architecture
-build-linux:
-	@mkdir -p $(BUILD_DIR)
-	cd $(CMD_MODULE) && CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=$(HOST_ARCH) go build $(GO_BUILD_FLAGS) -o $(CURDIR)/$(LINUX_BIN) .
-	@echo "built $(LINUX_BIN)"
-
-## build-simd: compile the chronos2 command with the SIMD kernels into dist/
-#
-# Architectures without a SIMD implementation build with the generic kernels.
-build-simd:
-	@mkdir -p $(BUILD_DIR)
-	cd $(CMD_MODULE) && CGO_ENABLED=$(CGO_ENABLED) GOEXPERIMENT=$(SIMD_EXPERIMENT) go build $(GO_BUILD_FLAGS) -o $(CURDIR)/$(SIMD_BIN) .
-	@echo "built $(SIMD_BIN)"
-
-## clean: remove build artifacts and the test cache
+## clean: remove the test cache
 clean:
-	rm -rf $(BUILD_DIR)
 	go clean -testcache
 
 ## format: rewrite the hand-written Go files with goimports, then gofumpt
@@ -104,7 +68,7 @@ format:
 
 ## help: list the available targets
 help:
-	@echo "$(APP) — available targets:"
+	@echo "chronos2-go — available targets:"
 	@echo
 	@grep -hE '^## [a-z0-9-]+:' $(MAKEFILE_LIST) \
 		| sed -e 's/^## //' \

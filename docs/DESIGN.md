@@ -38,12 +38,11 @@ The documentation of package `chronos2` is the public contract: every method, op
 
 ### Modules
 
-The project spans three repositories and five Go modules:
+The project spans three repositories and four Go modules:
 
 | Module Path | Repository and Directory | Contents |
 |---|---|---|
 | `github.com/pinkhop/chronos2-go` | `chronos2-go`, root | Package `chronos2`, all internal packages, and a tiny synthetic test checkpoint (saved copy of a model, here randomly initialized rather than trained). No real weights. |
-| `github.com/pinkhop/chronos2-go/cmd/chronos2` | `chronos2-go`, `cmd/chronos2` | The `chronos2` command-line tool. |
 | `github.com/pinkhop/chronos2-go/parity` | `chronos2-go`, `parity` | Real-model parity tests and their fixtures, the weights-manifest and embed-aliasing checks on the model modules, and the module-size check. Never required by another module and never tagged. |
 | `github.com/pinkhop/chronos2-go-base` | `chronos2-go-base`, root | Package `base` and the base checkpoint. |
 | `github.com/pinkhop/chronos2-go-small` | `chronos2-go-small`, root | Package `small` and the small checkpoint. |
@@ -52,7 +51,7 @@ Each model module is the only module in its repository. That repository holds th
 
 `go get` and `go mod download` fetch whole module archives, so this split also bounds what a consumer downloads: a consumer of the small model never downloads the base weights, and the root module's archive excludes the parity fixtures, which belong to a nested module.
 
-Requirements point in one direction only: each model module requires the root module; the command and `parity` each require the root module and both model modules; and no module requires `parity`. Because Go builds a consumer's dependency graph from `require` directives, `parity` can never enter it. The rule that keeps it that way is that only `parity` imports `parity`.
+Requirements point in one direction only: each model module requires the root module; `parity` requires the root module and both model modules; and no module requires `parity`. Because Go builds a consumer's dependency graph from `require` directives, `parity` can never enter it. The rule that keeps it that way is that only `parity` imports `parity`.
 
 Each model module requires the root module at the lowest version its `New()` works with, so a consumer's build selects whichever newer library version the consumer or another dependency requires. `parity` replaces the root module with `../`, so it tests the working tree, and takes the model modules from the module cache at the versions it requires, so its real-model tests run against the published weights.
 
@@ -63,7 +62,7 @@ Go limits a module download in two ways, and the [Go module proxy](https://proxy
 - **Module Archive:** the files in a module's zip archive may total at most 500 MiB uncompressed. The base model module is 477.9 MB, about 44 MiB below the limit; the small model module is 111.8 MB.
 - **Repository Archive:** for a module at a repository's root, Go downloads a `git archive` of the whole repository and refuses it when that raw zip exceeds 500 MiB. It applies the limit before it drops the files of nested modules, so they count too. Go disables `export-ignore` attributes for this archive, so no attribute can shrink it.
 
-The two checkpoints together zip to 527.5 MiB (base 427.9 MiB, small 99.6 MiB), more than one repository archive allows, so each lives in a repository of its own, and a model repository holds nothing its module does not need. The repository-archive limit binds this repository too: the root module's download includes `cmd/chronos2`, `parity`, and its fixtures, so no checkpoint may be committed here.
+The two checkpoints together zip to 527.5 MiB (base 427.9 MiB, small 99.6 MiB), more than one repository archive allows, so each lives in a repository of its own, and a model repository holds nothing its module does not need. The repository-archive limit binds this repository too: the root module's download includes `parity` and its fixtures, so no checkpoint may be committed here.
 
 `make test` includes a size check in the `parity` module that covers this repository's published modules, including the root module's whole-repository archive, so an oversized module fails locally or in CI rather than after it is published. It packages each module with `golang.org/x/mod/zip`, the package the `go` command itself uses, so it applies the proxy's exact rules.
 
@@ -71,12 +70,11 @@ The two checkpoints together zip to 527.5 MiB (base 427.9 MiB, small 99.6 MiB), 
 
 Versions are independent across repositories. A library release does not require a model release; a model repository releases only when its weights or its `New()` change. Every module's first release is v1.0.0.
 
-A release proceeds in this order, because `go install` checks the command's dependencies against its `go.sum`, which can record a module's checksum only after that module is published:
+A release proceeds in this order, because a module's `go.sum` can record another module's checksum only after that module is published:
 
 1.  Tag this repository's commit `vX.Y.Z`, releasing the root module.
 2.  For each model whose weights or `New()` changed, run `go mod tidy` in its repository, which records the library's checksum in its `go.sum`; commit, and tag that commit with the model's next version, `vX.Y.Z`.
-3.  In `cmd/chronos2`, set the requirements to the released versions, run `go mod tidy`, commit, and tag that commit `cmd/chronos2/vX.Y.Z`.
-4.  Set `parity`'s requirements to the same versions and run `go mod tidy` there too, so its real-model tests use the released weights. `parity` is never tagged.
+3.  Set `parity`'s requirements to the released versions and run `go mod tidy` there too, so its real-model tests use the released weights. `parity` is never tagged.
 
 ### Embedded Weights
 
@@ -113,17 +111,7 @@ Model packages build their `*Model` through one exported loader in package `chro
 
 ### Licensing
 
-The library is licensed under Apache-2.0, as are both checkpoints and the reference implementation. The root of each repository carries `LICENSE` and a `NOTICE` crediting Amazon's Chronos-2 work. The nested `cmd/chronos2` and `parity` modules carry their own copies of both files, because a nested module's archive contains only the files under its own directory.
-
-### Command-Line Tool
-
-The `chronos2` command is a quick way to try the library from a terminal (forecasting a CSV column without writing any Go), not a production forecasting tool. It covers only univariate forecasting; programs that need forecasts call the library directly. It embeds both models, and it parses its arguments with `github.com/urfave/cli/v3`, the only third-party dependency of any published module. Its `--help` output documents its flags; the rest of its behavior is:
-
-- `forecast` reads one numeric column from `--input` or standard input. A non-numeric first row is treated as a header and skipped. A blank cell or `NaN` marks a missing value; trailing blank lines are ignored.
-- It writes CSV to standard output: a `step` column numbered from 1, one `pN` column per requested percentile in ascending order, and a `median` column in its percentile position. Requesting 50 yields only the `median` column.
-- `version` prints the module version and VCS revision read from the binary's build information.
-- Errors go to standard error with a non-zero exit status.
-
+The library is licensed under Apache-2.0, as are both checkpoints and the reference implementation. The root of each repository carries `LICENSE` and a `NOTICE` crediting Amazon's Chronos-2 work. The nested `parity` module carries its own copies of both files, because a nested module's archive contains only the files under its own directory.
 
 ## Internal Architecture
 
@@ -187,8 +175,6 @@ chronos2-go/
 │   ├── horizon/            long-horizon autoregressive unrolling
 │   └── testmodel/          shared test support: the synthetic checkpoint, fixture readers, and parity comparisons
 ├── testdata/               the synthetic checkpoint and its reference outputs
-├── cmd/
-│   └── chronos2/           module: the command-line tool
 └── parity/                 module: real-model parity tests, the model-module checks, and the module-size check
     └── testdata/
         ├── base/
